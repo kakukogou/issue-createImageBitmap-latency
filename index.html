@@ -1,0 +1,140 @@
+<!DOCTYPE HTML>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Video Workers on MediaStreamTrack</title>
+</head>
+<body>
+<div id="container";style="overflow:hidden;width:2000px">
+    <div id="inner" style="overflow:hidden;width:2000px">
+        <div style="float:left;margin:10px;">
+            <input type="submit" id="playButton" class="buttonStyle" value="Play"></input>
+        </div>
+        <div style="float:left;margin:10px;">
+            <input type="submit" id="stopButton" class="buttonStyle" value="Stop"></input>
+        </div>
+    </div>
+    <div id="inner" style="overflow:hidden;width:2000px">
+        <div style="float:left;margin:10px;">
+            <video id="webcam"></video>
+        </div>
+        <div style="float:left;margin:10px;">
+            <canvas id="result"></canvas>
+        </div>
+    </div>
+</div>
+</body>
+
+<script type="text/javascript">
+var canvasResult = document.getElementById('result');
+var ctxResult = canvasResult.getContext('2d');
+var video = document.getElementById('webcam');
+var isContinuous = true;
+var localMediaStream;
+var playButton = document.getElementById('playButton');
+var stopButton = document.getElementById('stopButton');
+
+//Checking camera
+function hasGetUserMedia() {
+  return !!(navigator.getUserMedia ||
+            navigator.webkitGetUserMedia ||
+            navigator.mozGetUserMedia ||
+            navigator.msGetUserMedia);
+}
+
+if (hasGetUserMedia()) {
+    console.log("Camera OK");
+} else {
+    alert("Invalid!");
+}
+
+navigator.getUserMedia = navigator.getUserMedia ||
+                         navigator.webkitGetUserMedia ||
+                         navigator.mozGetUserMedia ||
+                         navigator.msGetUserMedia;
+
+playButton.onclick = function() {
+  console.log("palyButton clocked...");
+  navigator.getUserMedia({video: true, audio: false} , onSuccess, onFail);
+  console.log("palyButton clocked...!!");
+}
+
+stopButton.onclick = function() {
+  isContinuous = false;
+  video.pause();
+  localMediaStream.stop();
+  showStatistics();
+}
+
+function onSuccess(stream) {
+  console.log("onSuccess!!!");
+  localMediaStream = stream;
+  initVideo();
+}
+
+function onFail(e) {
+  console.log('Cannot access WebCAM!', e);
+}
+
+function initVideo() {
+  video.src = window.URL.createObjectURL(localMediaStream);
+  video.onloadeddata = initCanvases();
+  video.play();
+}
+
+function initCanvases() {
+  if (video.videoWidth == 0 ||  video.videoHeight == 0) {
+    // still not able to init canvas now, wait for next frame.
+    requestAnimationFrame(initCanvases);
+  }
+  else {
+    width = video.videoWidth
+    height = video.videoHeight;
+    video.setAttribute('width', width);
+    video.setAttribute('height', height);
+    canvasResult.setAttribute('width', width);
+    canvasResult.setAttribute('height', height);
+
+    isContinuous = true;
+    requestAnimationFrame(processOneFrame);
+  }
+}
+
+var frameNum = 0;
+var createImageBitmapS = 0;
+var createImageBitmapE = 0;
+var createImageBitmapTotal = 0;
+var createImageBitmapE2 = 0;
+var createImageBitmapTotal2 = 0;
+
+function showStatistics() {
+  console.log("createImageBitmap() Async: " + (createImageBitmapTotal / frameNum));
+  console.log("createImageBitmap() Sync: "  + (createImageBitmapTotal2 / frameNum));
+}
+
+function processOneFrame() {
+  ++frameNum;
+
+  // get the data of current frame
+  createImageBitmapS = new Date().getTime();
+  var promise = createImageBitmap(video);
+  createImageBitmapE2 = new Date().getTime();
+  createImageBitmapTotal2 += (createImageBitmapE2 - createImageBitmapS);
+
+  promise.then(function(bitmap) {
+    createImageBitmapE = new Date().getTime();
+    createImageBitmapTotal += (createImageBitmapE - createImageBitmapS);
+
+    // show result
+    ctxResult.drawImage(bitmap, 0, 0);
+
+    // ask for next frame
+    if (isContinuous) {
+      requestAnimationFrame(processOneFrame);
+    } else {
+      return;
+    }
+  });
+}
+</script>
+</html>
